@@ -71,8 +71,7 @@ func backupRemoteFiles(regexpsavepath *regexp.Regexp) (string, *sftp.Client, *ss
 	sshConfig := &ssh.ClientConfig{
 		User: "deck",
 		Auth: []ssh.AuthMethod{
-			//ssh.Password(promptpasswd()),
-			ssh.Password("bananacar1"),
+			ssh.Password(promptpasswd()),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
