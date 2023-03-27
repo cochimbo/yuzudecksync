@@ -35,7 +35,10 @@ func main() {
 	fullpathRemote, sftpClient, sshSession := backupRemoteFiles(regexpsavepath)
 	defer sftpClient.Close()
 	defer sshSession.Close()
-	syncFolder(fullpathRemote, fullPathlocal, sftpClient)
+	error := syncFolder(fullpathRemote, fullPathlocal, sftpClient)
+	if error != nil {
+		log.Fatal(error)
+	}
 }
 
 func backupLocalFilesWin(regexpsavepath *regexp.Regexp) string {
@@ -126,6 +129,10 @@ func syncFolder(remotePath string, localPath string, sftpClient *sftp.Client) er
 	color.Blue("Listing local folder")
 	first := true
 	filepath.Walk(localPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
 		if first {
 			first = false
 		} else {
@@ -143,6 +150,7 @@ func syncFolder(remotePath string, localPath string, sftpClient *sftp.Client) er
 						error := sftpClient.MkdirAll(remoteCheckPath)
 						if error != nil {
 							log.Fatal(error)
+							return error
 						}
 						color.Red("DONE")
 					} else {
