@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -35,7 +36,8 @@ func main() {
 	fullpathRemote, sftpClient, sshSession := backupRemoteFiles(regexpsavepath)
 	defer sftpClient.Close()
 	defer sshSession.Close()
-	error := syncFolder(fullpathRemote, fullPathlocal, sftpClient)
+	syncLocalFolders(fullpathRemote, fullPathlocal, sftpClient)
+	error := syncRemoteFolder(fullpathRemote, fullPathlocal, sftpClient)
 	if error != nil {
 		log.Fatal(error)
 	}
@@ -124,11 +126,11 @@ func promptpasswd() string {
 	return string(bytePassword)
 }
 
-func syncFolder(remotePath string, localPath string, sftpClient *sftp.Client) error {
+func syncLocalFolders(remotePath string, localPath string, sftpClient *sftp.Client) error {
 	//Sync local (just create remote dirs)
 	color.Blue("Listing local folder")
 	first := true
-	filepath.Walk(localPath, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(localPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			log.Fatal(err)
 			return err
@@ -161,6 +163,11 @@ func syncFolder(remotePath string, localPath string, sftpClient *sftp.Client) er
 		}
 		return nil
 	})
+	return err
+}
+
+func syncRemoteFolder(remotePath string, localPath string, sftpClient *sftp.Client) error {
+
 	//Sync remote
 	walker := sftpClient.Walk(remotePath)
 	for walker.Step() {
@@ -197,23 +204,29 @@ func syncFolder(remotePath string, localPath string, sftpClient *sftp.Client) er
 			continue
 		}
 
-		if remoteFileInfo.ModTime().After(localFileInfo.ModTime()) {
-			color.Red("File " + remoteFileInfo.Name() + " in steam deck is newer, downloading to local")
-			err = downloadFile(remoteFilePath, localFilePath, sftpClient)
-			if err != nil {
-				log.Fatal(err)
-				return err
-			}
-		} else if remoteFileInfo.ModTime().Before(localFileInfo.ModTime()) {
-			color.Red("File " + remoteFileInfo.Name() + " in steam deck is older, uploading to deck")
-			err = uploadFile(localFilePath, remoteFilePath, sftpClient)
-			if err != nil {
-				log.Fatal(err)
-				return err
-			}
-		}
+		syncfile(localFileInfo, remoteFileInfo, remoteFilePath, localFilePath, sftpClient)
 	}
 	color.Green("FILE SYNC DONE!")
+	return nil
+}
+
+func syncfile(localFileInfo fs.FileInfo, remoteFileInfo fs.FileInfo, remoteFilePath string, localFilePath string, sftpClient *sftp.Client) error {
+	var err error
+	if remoteFileInfo.ModTime().After(localFileInfo.ModTime()) {
+		color.Red("File " + remoteFileInfo.Name() + " in steam deck is newer, downloading to local")
+		err = downloadFile(remoteFilePath, localFilePath, sftpClient)
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
+	} else if remoteFileInfo.ModTime().Before(localFileInfo.ModTime()) {
+		color.Red("File " + remoteFileInfo.Name() + " in steam deck is older, uploading to deck")
+		err = uploadFile(localFilePath, remoteFilePath, sftpClient)
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
+	}
 	return nil
 }
 
