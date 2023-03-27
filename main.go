@@ -71,8 +71,8 @@ func backupRemoteFiles(regexpsavepath *regexp.Regexp) (string, *sftp.Client, *ss
 	sshConfig := &ssh.ClientConfig{
 		User: "deck",
 		Auth: []ssh.AuthMethod{
-			ssh.Password(promptpasswd()),
-			//ssh.Password("bananacar1"),
+			//ssh.Password(promptpasswd()),
+			ssh.Password("bananacar1"),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
@@ -123,8 +123,39 @@ func promptpasswd() string {
 }
 
 func syncFolder(remotePath string, localPath string, sftpClient *sftp.Client) error {
-	walker := sftpClient.Walk(remotePath)
+	//Sync local (just create remote dirs)
+	color.Blue("Listing local folder")
+	first := true
+	filepath.Walk(localPath, func(path string, info os.FileInfo, err error) error {
+		if first {
+			first = false
+		} else {
+			if info.IsDir() {
+				color.Blue("Checking : " + path)
+				remoteCheckPath := filepath.Join(remotePath, strings.TrimPrefix(path, localPath))
+				if runtime.GOOS == strings.ToLower("Windows") {
+					remoteCheckPath = strings.ReplaceAll(remoteCheckPath, "\\", "/")
+				}
+				_, err = sftpClient.Stat(remoteCheckPath)
+				if err != nil {
+					if err == os.ErrNotExist {
+						color.Red("Remote folder does not exist.")
+						color.Red("Creating " + remoteCheckPath)
+						error := sftpClient.MkdirAll(remoteCheckPath)
+						if error != nil {
+							log.Fatal(error)
+						}
+						color.Red("DONE")
+					} else {
+						panic(err)
+					}
+				}
+			}
+		}
+		return nil
+	})
 	//Sync remote
+	walker := sftpClient.Walk(remotePath)
 	for walker.Step() {
 		if walker.Err() != nil {
 			log.Fatal(walker.Err())
